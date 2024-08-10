@@ -1,0 +1,62 @@
+# Make sure to install required packages prior to running script
+library(tidyverse)
+
+# Read the CSV file of Dalziel2016_data; don't forget to change the file path
+dalziel_data <- read_csv("Path/Dalziel2016_data.csv")
+
+# Filter data for the year range 1920-1944, focusing on the southeast region; replace NA with "0"
+southeast_data <- dalziel_data %>%
+  filter(year >= 1920 & year <= 1944) %>%
+  filter(loc %in% c("NASHVILLE", "NEW ORLEANS", "RICHMOND", "WASHINGTON")) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
+# Filter data for the year range 1920-1944, focusing on the west region; replace NA with "0"
+west_data <- dalziel_data %>%
+  filter(year >= 1920 & year <= 1944) %>%
+  filter(loc %in% c("DENVER", "LOS ANGELES", "SALT LAKE CITY", "SAN FRANCISCO", "SEATTLE", "SPOKANE")) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
+# Remove 'loc' column for pairwise scatter plot
+numeric_data_west <- west_data[, c("biweek", "year", "cases", "pop")]
+numeric_data_southeast <- southeast_data[, c("biweek", "year", "cases", "pop")]
+
+# Generate pairwise scatter plots for west and southeast regions
+pairs(numeric_data_west, main = "West Region Pairwise")
+pairs(numeric_data_southeast, main = "Southeast Region Pairwise")
+
+# Use summary to obtain information on the datasets
+summary(west_data)
+summary(southeast_data)
+
+# Use table to create frequency/contingency tables with counts
+table(west_data$loc)
+table(southeast_data$loc)
+
+# Calculate infection rate for each city in west and southeast
+avg_infection_southeast <- southeast_data %>%
+  group_by(year, loc) %>%
+  summarise(InfectionRate = mean((cases/pop)*100), .groups = 'drop')
+
+avg_infection_west <- west_data %>%
+  group_by(year, loc) %>%
+  summarise(InfectionRate = mean((cases/pop)*100), .groups = 'drop')
+
+# Add Region designation to each tibble 
+avg_infection_southeast$Region <- "Southeast"
+avg_infection_west$Region <- "West"
+
+# Log-transform the infection rate values
+combined_region_data <- rbind(avg_infection_southeast, avg_infection_west)
+combined_region_data$log_InfectionRate <- log(combined_region_data$InfectionRate + 1)  # Adding 1 to avoid log(0)
+
+# Boxplot to compare log-transformed mean infection rates between the two regions
+ggplot(combined_region_data, aes(x = Region, y = log_InfectionRate, fill = Region)) +
+  geom_boxplot() +
+  labs(title = "Comparison of Log-Transformed Mean Infection Rates Between West and Southeast Regions",
+       x = "Region",
+       y = "Log-Transformed Mean Infection Rate") +
+  theme_minimal()
+
+# Perform a t-test on log-transformed data
+t_test_result <- t.test(log_InfectionRate ~ Region, data = combined_region_data)
+print(t_test_result)
